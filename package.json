@@ -1,0 +1,14 @@
+{
+  "name": "wall",
+  "version": "0.1.0",
+  "description": "A need-to-know ledger for confidential Jira projects (Forge app).",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  }
+}
