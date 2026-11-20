@@ -83,6 +83,25 @@ test('the time window and a missing record are handled honestly', () => {
   assert.equal(after2.found, false);
 });
 
+test('a change made in Atlassian Administration is timed but nobody is named', () => {
+  // Such changes reach Jira's audit log with the author shown as "JIRA".
+  const records = auditRecords().map((r) => (r.id === 2001 ? { ...r, authorAccountId: undefined, authorKey: 'JIRA' } : r));
+  const after = withGroupMember(site, 'g-deal', 'u-ada');
+  const tiers = wallTiers(after, 'FALCON');
+  const ada = tiers.canSee.find((p) => p.accountId === 'u-ada');
+  const result = attributeCrossing(ada, normaliseAuditRecords(records, after), { project: tiers.project, schemeId: tiers.scheme.id, snapshot: after });
+  assert.equal(result.found, true);
+  assert.equal(result.actorVisible, false);
+  assert.equal(result.actorAccountId, null);
+  assert.equal(result.selfAdmitted, false);
+  assert.equal(
+    result.sentence,
+    'Ada was added to group "falcon-deal-team" on 2026-12-02 10:15 UTC outside Jira (for example in Atlassian Administration), which gives access through group "falcon-deal-team". Jira\'s audit log does not name who made it; the organization audit log does.',
+  );
+  const jiraAuthor = normaliseAuditRecords([{ ...auditRecords()[0], authorAccountId: 'JIRA' }], after)[0];
+  assert.equal(jiraAuthor.actorAccountId, null);
+});
+
 test('a group addition that does not name the person is only a partial match', () => {
   const records = auditRecords().map((r) => (r.id === 2001 ? { ...r, objectItem: { id: 'x', name: 'someone else', typeName: 'USER' } } : r));
   const after = withGroupMember(site, 'g-deal', 'u-ada');

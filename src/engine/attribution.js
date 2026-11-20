@@ -32,6 +32,16 @@ export const AUDIT_RULES = [
   { kind: ChangeKind.PROJECT_LEAD_CHANGED, summary: /project (updated|lead)|lead changed/i, types: ['PROJECT'], fields: /lead/i },
 ];
 
+/**
+ * Changes made in Atlassian Administration (for example group membership) reach
+ * Jira's audit log with the author shown as "JIRA": the real person is only in
+ * the organization audit log, which apps cannot read. Such changes have no actor.
+ */
+function visibleActor(authorAccountId) {
+  if (authorAccountId == null || authorAccountId === '') return null;
+  return /^jira$/i.test(String(authorAccountId)) ? null : String(authorAccountId);
+}
+
 function items(record) {
   return [record.objectItem, ...(record.associatedItems ?? [])].filter(Boolean);
 }
@@ -100,7 +110,8 @@ export function normaliseAuditRecord(record, index) {
   const change = {
     id: String(record.id),
     at: isoTime(record.created),
-    actorAccountId: record.authorAccountId ?? record.authorKey ?? null,
+    actorAccountId: visibleActor(record.authorAccountId),
+    authorKey: record.authorKey ?? null,
     summary: record.summary ?? '',
     category: record.category ?? null,
     kind,
@@ -225,17 +236,19 @@ export function attributeCrossing(person, changes, { project, schemeId, until, s
     };
   }
   const index = snapshot ? indexSnapshot(snapshot) : null;
-  const actorName = (index && index.users.get(best.change.actorAccountId)?.displayName) ?? best.change.actorAccountId ?? 'Someone';
+  const actorVisible = Boolean(best.change.actorAccountId);
+  const actorName = (index && index.users.get(best.change.actorAccountId)?.displayName) ?? best.change.actorAccountId;
   const personName = person.displayName ?? person.accountId;
   return {
     found: true,
     confidence: best.confidence,
+    actorVisible,
     actorAccountId: best.change.actorAccountId,
     at: best.change.at,
     auditRecordId: best.change.id,
     route: best.route,
     routeKey: routeKey(best.route),
-    selfAdmitted: best.change.actorAccountId === person.accountId,
+    selfAdmitted: actorVisible && best.change.actorAccountId === person.accountId,
     candidates: candidates.map((c) => ({ confidence: c.confidence, auditRecordId: c.change.id, at: c.change.at, routeKey: routeKey(c.route) })),
     sentence: sentenceFor(actorName, personName, best.change.actorAccountId === person.accountId, best),
   };
@@ -243,6 +256,13 @@ export function attributeCrossing(person, changes, { project, schemeId, until, s
 
 function sentenceFor(actorName, personName, self, { change, route, confidence }) {
   const when = `on ${String(change.at).slice(0, 16).replace('T', ' ')} UTC`;
+  if (!actorName) {
+    const what =
+      change.kind === ChangeKind.GROUP_MEMBER_ADDED
+        ? `${personName} was added to group "${route.groupName}"`
+        : 'A change was made';
+    return `${what} ${when} outside Jira (for example in Atlassian Administration), which gives access through ${describeRoute(route)}. Jira's audit log does not name who made it; the organization audit log does.`;
+  }
   const who = self ? 'themselves' : personName;
   let what;
   switch (change.kind) {
