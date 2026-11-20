@@ -20,6 +20,7 @@ import { isoTime } from './model.js';
 
 export const INSIDER_LIST_LAYOUT = Object.freeze({
   source: 'Commission Implementing Regulation (EU) 2026/1291, Annex I, Template 1',
+  officialJournal: 'OJ L, 2026/1291, 15.6.2026',
   url: 'https://eur-lex.europa.eu/eli/reg_impl/2026/1291/oj/eng',
   inForceFrom: '2026-07-05',
   header: Object.freeze([

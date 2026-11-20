@@ -6,7 +6,8 @@ Code: [src/engine/export.js](../src/engine/export.js). Tests: [test/export.test.
 
 ## Which template
 
-- **Commission Implementing Regulation (EU) 2026/1291** of 12 June 2026 sets the format of insider lists under Article 18 of the Market Abuse Regulation (Regulation (EU) No 596/2014). It was published in the Official Journal on 15 June 2026, entered into force on 5 July 2026 and repealed Implementing Regulation (EU) 2022/1210.
+- **Commission Implementing Regulation (EU) 2026/1291** of 12 June 2026 sets the format of insider lists under Article 18 of the Market Abuse Regulation (Regulation (EU) No 596/2014). Reference: OJ L, 2026/1291, 15.6.2026, http://data.europa.eu/eli/reg_impl/2026/1291/oj. Article 3 repeals Implementing Regulation (EU) 2022/1210; under Article 4 it entered into force on the twentieth day after publication, 5 July 2026.
+- The four header labels and seven column headings in `INSIDER_LIST_LAYOUT` were compared, character for character after whitespace normalisation, with the Official Journal text of Annex I, Template 1 ("Template for the insider lists referred to in Article 1(1) and Article 2(2), first subparagraph") on 20 November 2026; all eleven match.
 - It implements Article 18(9) as rewritten by the EU Listing Act (Regulation (EU) 2024/2809): the lighter format that used to be reserved for SME growth market issuers now applies to all insider lists. Every template now has seven columns; the repealed 2022/1210 event-based template had twelve (including birth surname, personal phone numbers, home address and a separate date of birth).
 - The Listing Act did not change Article 18(1) to (5): the list still covers everyone with access to the inside information, each person must acknowledge their duties in writing, and the list is kept for at least five years after it is drawn up or updated.
 - Status checked on 19 November 2026: 2026/1291 in force, with no amendment or corrigendum recorded; nothing further pending on the insider-list standards.
@@ -57,7 +58,7 @@ The export refuses to run on a ledger that fails verification. Otherwise it retu
 
 ## Sources
 
-- Commission Implementing Regulation (EU) 2026/1291: https://eur-lex.europa.eu/eli/reg_impl/2026/1291/oj/eng
+- Commission Implementing Regulation (EU) 2026/1291, OJ L, 2026/1291, 15.6.2026: https://eur-lex.europa.eu/eli/reg_impl/2026/1291/oj/eng (ELI http://data.europa.eu/eli/reg_impl/2026/1291/oj; the same Official Journal text is served by the Publications Office at http://publications.europa.eu/resource/celex/32026R1291)
 - Commission Implementing Regulation (EU) 2022/1210 (repealed 5 July 2026): https://eur-lex.europa.eu/eli/reg_impl/2022/1210/oj/eng
 - Regulation (EU) No 596/2014, consolidated version of 5 June 2026: https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:02014R0596-20260605
 - Regulation (EU) 2024/2809 (Listing Act): https://eur-lex.europa.eu/eli/reg/2024/2809/oj/eng
