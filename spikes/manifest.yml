@@ -1,0 +1,76 @@
+# Wall spike: a throwaway Forge app for the week-1 go/no-go questions.
+# It is registered as its own app (forge register), deployed to the development
+# environment only, installed on the Forge demo site, and deleted afterwards.
+# The scopes are the candidate set for the real app, so the spike also tests them.
+app:
+  id: ari:cloud:ecosystem::app/REPLACE_WITH_ID_FROM_FORGE_REGISTER
+  runtime:
+    name: nodejs24.x
+
+modules:
+  jira:adminPage:
+    - key: wall-spike-admin
+      resource: admin-ui
+      render: native
+      resolver:
+        function: resolver
+      title: Wall spike
+
+  rovo:agent:
+    - key: wall-spike-agent
+      name: Wall spike
+      description: Checks that a Wall agent, action and skill load on this site.
+      prompt: |
+        You answer questions about who can see a Jira project.
+        When the user names a project key, call the wall-spike-check action with it
+        and report the permission scheme and the number of grants it returned.
+        If the action returns an error, show the status and the message as they are.
+      conversationStarters:
+        - Which permission scheme does project KEY use?
+      actions:
+        - wall-spike-check
+      skills:
+        - wall-check
+
+  action:
+    - key: wall-spike-check
+      name: Check project access
+      function: spike-action
+      actionVerb: GET
+      description: Returns the permission scheme of a Jira project and how many grants give Browse projects.
+      inputs:
+        projectKey:
+          title: Project key
+          type: string
+          required: true
+          description: Key of the Jira project, for example FALCON.
+
+  rovo:skill:
+    - key: wall-check
+      source:
+        dir: skills/wall-check
+      dependencies:
+        tools:
+          - wall-spike-check
+
+  function:
+    - key: resolver
+      handler: index.handler
+    - key: spike-action
+      handler: index.spikeAction
+
+resources:
+  - key: admin-ui
+    path: src/frontend/admin.jsx
+
+permissions:
+  scopes:
+    - read:jira-work
+    - read:jira-user
+    - manage:jira-configuration
+    - manage:jira-project
+    - read:graph:user:atlassian
+    - read:graph:team:atlassian
+    - read:graph:project:jira
+    - read:graph:issue:jira
+    - read:graph:issue-comment:jira

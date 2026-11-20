@@ -1,0 +1,17 @@
+{
+  "name": "wall-spike",
+  "version": "0.0.1",
+  "description": "Throwaway Forge app that answers Wall's week-1 platform questions. Not part of the shipped app.",
+  "private": true,
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@forge/api": "8.4.0",
+    "@forge/bridge": "7.2.1",
+    "@forge/react": "12.4.0",
+    "@forge/resolver": "2.0.2",
+    "react": "18.3.1"
+  },
+  "devDependencies": {
+    "@forge/cli": "15.0.0"
+  }
+}

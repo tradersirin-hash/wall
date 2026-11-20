@@ -6,3 +6,6 @@ dist/
 
 .DS_Store
 Thumbs.db
+
+# Spike results hold real account ids from the test site.
+spikes/results/
