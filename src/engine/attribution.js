@@ -2,9 +2,17 @@
 //
 // Input is the `records` array of GET /rest/api/3/auditing/record. Jira does not
 // document the summary strings it writes, so the classification lives in one
-// rule table (AUDIT_RULES) that the week-1 spike checks against real records.
-// Every rule also looks at the item types (USER, GROUP, PROJECT, PROJECT_ROLE,
-// PERMISSION_SCHEME), not only at the summary text.
+// rule table (AUDIT_RULES). What a Jira Cloud site wrote on 21 November 2026:
+//   - summaries are English ("User added to group", "User removed from group",
+//     "Project roles changed", "Permission scheme copied", "Group created"), but
+//     `category` follows the reader's language, so rules never use it;
+//   - role changes: objectItem PROJECT_ROLE with id, associatedItems PROJECT with
+//     id and name, one changedValues entry per record ("Users", account id in
+//     changedTo for an addition or changedFrom for a removal), author account id;
+//   - group membership: objectItem GROUP with a name and no id, associatedItems USER
+//     whose id is the user's key (not the account id); a change made through Jira's
+//     REST API is written twice, once with the author and once, a second later,
+//     without one (a mirror from the identity platform).
 
 import { describeRoute, routeKey } from './describe.js';
 import { indexSnapshot, isoTime, resolveGroup } from './model.js';
@@ -59,14 +67,14 @@ function splitList(value) {
     .filter(Boolean);
 }
 
-/** Resolve a user mentioned in an audit record (by account id, then by display name). */
+/** Resolve a user mentioned in an audit record (by account id, then user key, then display name). */
 function userRef(index, idOrName, name) {
-  const byId = idOrName ? index.users.get(idOrName) : undefined;
+  const byId = idOrName ? index.users.get(idOrName) ?? index.usersByKey.get(idOrName) : undefined;
   if (byId) return { accountId: byId.accountId, name: byId.displayName ?? byId.accountId };
   const label = name ?? idOrName;
   const matches = index.snapshot.users.filter((u) => u.displayName === label);
   if (matches.length === 1) return { accountId: matches[0].accountId, name: label };
-  return { accountId: null, name: label ?? null, ambiguous: matches.length > 1 };
+  return { accountId: null, key: idOrName ?? null, name: label ?? null, ambiguous: matches.length > 1 };
 }
 
 function groupRef(index, idOrName, name) {
@@ -151,10 +159,41 @@ export function normaliseAuditRecord(record, index) {
   return change;
 }
 
-/** Normalise and sort (oldest first) a page of audit records. */
+const MIRROR_WINDOW_MS = 10 * 1000;
+
+function sameUsers(a, b) {
+  const ids = (list) => list.map((u) => u.accountId ?? u.key ?? u.name).sort().join(',');
+  return ids(a.users.added) === ids(b.users.added) && ids(a.users.removed) === ids(b.users.removed);
+}
+
+/**
+ * Mark the author-less copy that the identity platform writes after a group change
+ * made through Jira's REST API, so it does not hide the copy that names the author.
+ */
+function markMirrors(changes) {
+  for (const change of changes) {
+    if (change.actorAccountId || (change.kind !== ChangeKind.GROUP_MEMBER_ADDED && change.kind !== ChangeKind.GROUP_MEMBER_REMOVED)) continue;
+    const t = new Date(change.at).getTime();
+    const original = changes.find(
+      (other) =>
+        other !== change &&
+        other.actorAccountId &&
+        other.kind === change.kind &&
+        other.group?.groupName === change.group?.groupName &&
+        sameUsers(other, change) &&
+        t - new Date(other.at).getTime() >= 0 &&
+        t - new Date(other.at).getTime() <= MIRROR_WINDOW_MS,
+    );
+    if (original) change.mirrorOf = original.id;
+  }
+  return changes;
+}
+
+/** Normalise and sort (oldest first) a page of audit records. Mirrors are kept but marked. */
 export function normaliseAuditRecords(records, snapshot) {
   const index = indexSnapshot(snapshot);
-  return (records ?? []).map((r) => normaliseAuditRecord(r, index)).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const changes = (records ?? []).map((r) => normaliseAuditRecord(r, index)).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  return markMirrors(changes);
 }
 
 function sameProject(change, project) {
@@ -215,6 +254,7 @@ export function attributeCrossing(person, changes, { project, schemeId, until, s
   const lower = isoTime(since);
   const candidates = [];
   for (const change of changes) {
+    if (change.mirrorOf) continue;
     if (upper && String(change.at) > upper) continue;
     if (lower && String(change.at) < lower) continue;
     for (const route of person.routes ?? []) {

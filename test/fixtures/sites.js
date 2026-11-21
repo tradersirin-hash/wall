@@ -12,7 +12,14 @@ export function g(permission, type, parameter) {
   return { id: String(grantSeq), permission, holder };
 }
 
-const user = (accountId, displayName, extra = {}) => ({ accountId, displayName, active: true, accountType: 'atlassian', ...extra });
+const user = (accountId, displayName, extra = {}) => ({
+  accountId,
+  displayName,
+  active: true,
+  accountType: 'atlassian',
+  userKey: `key-${accountId.slice(2)}`,
+  ...extra,
+});
 
 export const ROLE = Object.freeze({ ADMINISTRATORS: '10002', DEVELOPERS: '10001', WALLED: '10100', KEEPER: '10200' });
 

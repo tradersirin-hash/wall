@@ -16,7 +16,10 @@ test('audit records are classified and normalised', () => {
     2004: ChangeKind.GROUP_MEMBER_ADDED,
     2005: ChangeKind.SCHEME_CHANGED,
     2006: ChangeKind.OTHER,
+    2007: ChangeKind.GROUP_MEMBER_ADDED,
   });
+  assert.equal(changes.find((c) => c.id === '2007').mirrorOf, '2001', 'the author-less copy of a REST change is marked');
+  assert.equal(changes.find((c) => c.id === '2004').mirrorOf, undefined, 'a change made in Atlassian Administration is not a mirror');
   assert.equal(changes[0].id, '2004', 'oldest first');
   const roleChange = changes.find((c) => c.id === '2002');
   assert.deepEqual(roleChange.users.added.map((u) => u.accountId), ['u-kim']);
@@ -103,7 +106,9 @@ test('a change made in Atlassian Administration is timed but nobody is named', (
 });
 
 test('a group addition that does not name the person is only a partial match', () => {
-  const records = auditRecords().map((r) => (r.id === 2001 ? { ...r, objectItem: { id: 'x', name: 'someone else', typeName: 'USER' } } : r));
+  const records = auditRecords()
+    .filter((r) => r.id !== 2007)
+    .map((r) => (r.id === 2001 ? { ...r, associatedItems: [{ id: 'key-unknown', name: 'key-unknown', typeName: 'USER' }] } : r));
   const after = withGroupMember(site, 'g-deal', 'u-ada');
   const tiers = wallTiers(after, 'FALCON');
   const ada = tiers.canSee.find((p) => p.accountId === 'u-ada');

@@ -5,7 +5,7 @@
 // Jira itself. Jira's REST API says "project"; Jira's UI may say "space".
 
 /**
- * @typedef {{ accountId: string, displayName?: string, active?: boolean, accountType?: string }} User
+ * @typedef {{ accountId: string, displayName?: string, active?: boolean, accountType?: string, userKey?: string }} User
  * @typedef {{ groupId: string, name: string, memberIds: string[], complete?: boolean }} Group
  * @typedef {{ userIds: string[], groupIds: string[] }} Actors
  * @typedef {{ id: string, name: string, description?: string }} Role
@@ -117,6 +117,8 @@ export function isAnalysable(project) {
  */
 export function indexSnapshot(snapshot) {
   const users = new Map(snapshot.users.map((u) => [u.accountId, u]));
+  // Audit records name users in group changes by user key; the scan maps keys to accounts.
+  const usersByKey = new Map(snapshot.users.filter((u) => u.userKey).map((u) => [u.userKey, u]));
   const groups = new Map(snapshot.groups.map((g) => [g.groupId, g]));
   const groupsByName = new Map(snapshot.groups.map((g) => [g.name, g]));
   const roles = new Map(snapshot.roles.map((r) => [String(r.id), r]));
@@ -131,7 +133,7 @@ export function indexSnapshot(snapshot) {
       memberships.get(id).add(g.groupId);
     }
   }
-  return { snapshot, users, groups, groupsByName, roles, rolesByName, schemes, projects, projectsById, memberships };
+  return { snapshot, users, usersByKey, groups, groupsByName, roles, rolesByName, schemes, projects, projectsById, memberships };
 }
 
 /** Resolve the group a grant or actor refers to, by id first and then by name. */
