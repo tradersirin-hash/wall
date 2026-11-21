@@ -17,7 +17,13 @@ test('audit records are classified and normalised', () => {
     2005: ChangeKind.SCHEME_CHANGED,
     2006: ChangeKind.OTHER,
     2007: ChangeKind.GROUP_MEMBER_ADDED,
+    2008: ChangeKind.PROJECT_SCHEME_CHANGED,
+    2009: ChangeKind.PROJECT_ACCESS_REMOVED,
   });
+  const grant = changes.find((c) => c.id === '2005');
+  assert.deepEqual(grant.grant, { change: 'added', permission: 'Browse Projects', type: 'Grup', value: 'jira-software-users' });
+  assert.deepEqual(grant.groups.added.map((g) => g.groupId), ['g-staff']);
+  assert.deepEqual(changes.find((c) => c.id === '2009').users.removed.map((u) => u.accountId), ['u-cem']);
   assert.equal(changes.find((c) => c.id === '2007').mirrorOf, '2001', 'the author-less copy of a REST change is marked');
   assert.equal(changes.find((c) => c.id === '2004').mirrorOf, undefined, 'a change made in Atlassian Administration is not a mirror');
   assert.equal(changes[0].id, '2004', 'oldest first');
@@ -82,8 +88,13 @@ test('the time window and a missing record are handled honestly', () => {
   assert.equal(before.found, false);
   assert.equal(before.confidence, 'none');
   assert.match(before.sentence, /No matching record/);
-  const after2 = attributeCrossing(ada, changes, { project: tiers.project, schemeId: tiers.scheme.id, since: '2026-12-02T10:30:00+0000' });
+  // After 10:30 only unrelated changes happen until noon: a grant to another group and role changes.
+  const after2 = attributeCrossing(ada, changes, { project: tiers.project, schemeId: tiers.scheme.id, since: '2026-12-02T10:30:00+0000', until: '2026-12-02T12:05:00Z' });
   assert.equal(after2.found, false);
+  // A switch of the project's scheme could explain any route, so it is a partial match.
+  const later = attributeCrossing(ada, changes, { project: tiers.project, schemeId: tiers.scheme.id, since: '2026-12-02T10:30:00+0000' });
+  assert.equal(later.confidence, 'partial');
+  assert.equal(later.auditRecordId, '2008');
 });
 
 test('a change made in Atlassian Administration is timed but nobody is named', () => {
@@ -115,4 +126,17 @@ test('a group addition that does not name the person is only a partial match', (
   const result = attributeCrossing(ada, normaliseAuditRecords(records, after), { project: tiers.project, schemeId: tiers.scheme.id, snapshot: after });
   assert.equal(result.confidence, 'partial');
   assert.match(result.sentence, /closest matching change/);
+});
+
+test('a Browse grant added to the scheme is attributed to whoever added it', () => {
+  const after = changed(site, (s) => {
+    s.schemes.find((x) => x.id === '10').grants.push({ id: 'new', permission: 'BROWSE_PROJECTS', holder: { type: 'group', parameter: 'jira-software-users', value: 'g-staff' } });
+  });
+  const tiers = wallTiers(after, 'FALCON');
+  const kim = tiers.canSee.find((p) => p.accountId === 'u-kim');
+  assert.deepEqual(kim.routes, [{ kind: 'group', groupId: 'g-staff', groupName: 'jira-software-users' }]);
+  const result = attributeCrossing(kim, normaliseAuditRecords(auditRecords(), after), { project: tiers.project, schemeId: tiers.scheme.id, snapshot: after });
+  assert.equal(result.confidence, 'exact');
+  assert.equal(result.auditRecordId, '2005');
+  assert.match(result.sentence, /^Ada granted "Browse Projects" to "jira-software-users" in permission scheme "Falcon Scheme" on 2026-12-02 12:00 UTC/);
 });

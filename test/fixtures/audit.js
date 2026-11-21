@@ -2,8 +2,7 @@
 // Cloud site on 21 November 2026 (see the notes in src/engine/attribution.js).
 // All names and ids are invented and match test/fixtures/sites.js; categories are
 // in Turkish on purpose, because Jira localises them to the reader's language.
-// Records 2003 (a group added to a role) and 2005 (a scheme grant) are shapes not
-// yet seen on a real site.
+// Record 2003 (a group added to a role) is the only shape not yet seen on a real site.
 
 const IDP = 'com.atlassian.crowd.directory.IdentityPlatformRemoteDirectory';
 const group = (name) => ({ name, typeName: 'GROUP', parentId: '1', parentName: IDP });
@@ -70,6 +69,7 @@ export function auditRecords() {
       associatedItems: [userByKey('key-kim')],
     },
     {
+      // Ada grants Browse projects to a group in FALCON's scheme. Type is localised.
       id: 2005,
       summary: 'Permission scheme updated',
       created: '2026-12-02T12:00:00.000+0000',
@@ -77,8 +77,35 @@ export function auditRecords() {
       eventSource: '',
       authorAccountId: 'u-ada',
       authorKey: 'key-ada',
-      objectItem: { id: '30', name: 'Leaky Scheme', typeName: 'SCHEME' },
-      changedValues: [{ fieldName: 'Browse Projects', changedTo: 'Anyone' }],
+      objectItem: { id: '10', name: 'Falcon Scheme', typeName: 'SCHEME' },
+      changedValues: [
+        { fieldName: 'Permission', changedFrom: '', changedTo: 'Browse Projects' },
+        { fieldName: 'Type', changedFrom: '', changedTo: 'Grup' },
+        { fieldName: 'Value', changedFrom: '', changedTo: 'jira-software-users' },
+      ],
+    },
+    {
+      id: 2008,
+      summary: 'Permission scheme added to project',
+      created: '2026-12-02T12:10:00.000+0000',
+      category: 'izinler',
+      eventSource: '',
+      authorAccountId: 'u-ivo',
+      authorKey: 'key-ivo',
+      objectItem: { id: '10400', name: 'Project Falcon', typeName: 'PROJECT' },
+      associatedItems: [{ id: '10', name: 'Falcon Scheme', typeName: 'SCHEME' }],
+      changedValues: [],
+    },
+    {
+      id: 2009,
+      summary: 'User removed from project',
+      created: '2026-12-02T12:20:00.000+0000',
+      category: 'projeler',
+      eventSource: '',
+      authorAccountId: 'u-eli',
+      authorKey: 'key-eli',
+      objectItem: { id: '10400', name: 'Project Falcon', typeName: 'PROJECT' },
+      associatedItems: [userByKey('key-cem')],
     },
     {
       id: 2006,

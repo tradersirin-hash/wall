@@ -4,8 +4,16 @@
 // document the summary strings it writes, so the classification lives in one
 // rule table (AUDIT_RULES). What a Jira Cloud site wrote on 21 November 2026:
 //   - summaries are English ("User added to group", "User removed from group",
-//     "Project roles changed", "Permission scheme copied", "Group created"), but
-//     `category` follows the reader's language, so rules never use it;
+//     "Project roles changed", "User removed from project", "Permission scheme
+//     updated", "Permission scheme added to project", "Permission scheme copied",
+//     "Group created"), but `category` and some values (a grant's Type) follow the
+//     reader's language, so rules never use them;
+//   - adding someone on a project's People screen is a "Project roles changed"
+//     record; removing them there is "User removed from project" (PROJECT item, the
+//     user by key);
+//   - a scheme grant is "Permission scheme updated" with changedValues Permission,
+//     Type and Value ("" to "Browse Projects", "" to the group name); a scheme switch
+//     is "Permission scheme added to project" with the new SCHEME as associated item;
 //   - role changes: objectItem PROJECT_ROLE with id, associatedItems PROJECT with
 //     id and name, one changedValues entry per record ("Users", account id in
 //     changedTo for an addition or changedFrom for a removal), author account id;
@@ -21,6 +29,8 @@ export const ChangeKind = Object.freeze({
   GROUP_MEMBER_ADDED: 'group-member-added',
   GROUP_MEMBER_REMOVED: 'group-member-removed',
   ROLE_ACTORS_CHANGED: 'role-actors-changed',
+  PROJECT_ACCESS_ADDED: 'project-access-added',
+  PROJECT_ACCESS_REMOVED: 'project-access-removed',
   SCHEME_CHANGED: 'permission-scheme-changed',
   PROJECT_SCHEME_CHANGED: 'project-scheme-changed',
   PROJECT_LEAD_CHANGED: 'project-lead-changed',
@@ -34,6 +44,8 @@ export const ChangeKind = Object.freeze({
 export const AUDIT_RULES = [
   { kind: ChangeKind.GROUP_MEMBER_ADDED, summary: /(user|member)s? (was |were )?added to (a )?group|added (a )?(user|member)s? to (a )?group/i },
   { kind: ChangeKind.GROUP_MEMBER_REMOVED, summary: /(user|member)s? (was |were )?removed from (a )?group|removed (a )?(user|member)s? from (a )?group/i },
+  { kind: ChangeKind.PROJECT_ACCESS_REMOVED, summary: /user removed from project/i, types: ['PROJECT'] },
+  { kind: ChangeKind.PROJECT_ACCESS_ADDED, summary: /user added to project/i, types: ['PROJECT'] },
   { kind: ChangeKind.ROLE_ACTORS_CHANGED, summary: /project role|role (actors?|members?)/i, types: ['PROJECT_ROLE', 'PROJECT'] },
   { kind: ChangeKind.PROJECT_SCHEME_CHANGED, summary: /permission scheme.*(project|associat)|project.*permission scheme/i, types: ['PROJECT'] },
   { kind: ChangeKind.SCHEME_CHANGED, summary: /permission/i, types: ['PERMISSION_SCHEME', 'SCHEME'] },
@@ -108,6 +120,22 @@ function listDelta(changedValues, fieldPattern) {
   return { added, removed };
 }
 
+/** The grant a "Permission scheme updated" record adds or removes, from its Permission, Type and Value fields. */
+function schemeGrant(changedValues) {
+  const field = (pattern) => (changedValues ?? []).find((c) => pattern.test(String(c.fieldName ?? '')));
+  const value = field(/^value$/i);
+  if (!value) return null;
+  const permission = field(/^permission$/i);
+  const type = field(/^type$/i);
+  const added = Boolean(value.changedTo) && !value.changedFrom;
+  return {
+    change: added ? 'added' : 'removed',
+    permission: (added ? permission?.changedTo : permission?.changedFrom) ?? null,
+    type: (added ? type?.changedTo : type?.changedFrom) ?? null,
+    value: (added ? value.changedTo : value.changedFrom) ?? null,
+  };
+}
+
 /**
  * Turn one audit record into a change Wall can match against an access route.
  * @param {any} record one element of `records` from GET /rest/api/3/auditing/record
@@ -151,10 +179,20 @@ export function normaliseAuditRecord(record, index) {
     change.groups.added = groups.added.map((v) => groupRef(index, v, v));
     change.groups.removed = groups.removed.map((v) => groupRef(index, v, v));
   }
+  if (kind === ChangeKind.PROJECT_ACCESS_ADDED || kind === ChangeKind.PROJECT_ACCESS_REMOVED) {
+    const bucket = kind === ChangeKind.PROJECT_ACCESS_ADDED ? change.users.added : change.users.removed;
+    for (const u of itemsOfType(record, 'USER')) bucket.push(userRef(index, u.id, u.name));
+  }
   if (kind === ChangeKind.SCHEME_CHANGED) {
-    const groups = listDelta(record.changedValues, /.*/);
-    change.groups.added = groups.added.map((v) => groupRef(index, v, v)).filter((g) => g.groupId);
-    change.users.added = groups.added.map((v) => userRef(index, v, v)).filter((u) => u.accountId);
+    change.grant = schemeGrant(record.changedValues);
+    if (change.grant?.value) {
+      const groupsOut = change.grant.change === 'added' ? change.groups.added : change.groups.removed;
+      const usersOut = change.grant.change === 'added' ? change.users.added : change.users.removed;
+      const group = groupRef(index, change.grant.value, change.grant.value);
+      if (group.groupId) groupsOut.push(group);
+      const user = userRef(index, change.grant.value, change.grant.value);
+      if (user.accountId) usersOut.push(user);
+    }
   }
   return change;
 }
@@ -226,10 +264,19 @@ export function matchChange(change, { accountId, route, project, schemeId }) {
       if (route.kind === 'role') return namesUser(change.users.added, accountId) ? 'exact' : 'partial';
       if (route.kind === 'role-group') return change.groups.added.some((g) => sameGroup(g, route)) ? 'exact' : 'partial';
       return null;
+    case ChangeKind.PROJECT_ACCESS_ADDED:
+      if (!sameProject(change, project) || (route.kind !== 'role' && route.kind !== 'role-group')) return null;
+      return namesUser(change.users.added, accountId) ? 'exact' : 'partial';
     case ChangeKind.SCHEME_CHANGED:
       if (change.scheme && change.scheme.id !== String(schemeId)) return null;
-      if (route.kind === 'direct') return namesUser(change.users.added, accountId) ? 'exact' : 'partial';
-      if (route.kind === 'group') return change.groups.added.some((g) => sameGroup(g, route)) ? 'exact' : 'partial';
+      if (change.grant) {
+        // A known grant explains a route only if it added Browse for that very holder.
+        if (change.grant.change !== 'added' || !/browse/i.test(change.grant.permission ?? '')) return null;
+        if (route.kind === 'direct') return namesUser(change.users.added, accountId) ? 'exact' : null;
+        if (route.kind === 'group') return change.groups.added.some((g) => sameGroup(g, route)) ? 'exact' : null;
+        if (route.kind === 'role' || route.kind === 'role-group') return change.grant.value === route.roleName ? 'exact' : null;
+        return null;
+      }
       return change.scheme ? 'partial' : null;
     case ChangeKind.PROJECT_SCHEME_CHANGED:
       return sameProject(change, project) ? 'partial' : null;
@@ -315,8 +362,13 @@ function sentenceFor(actorName, personName, self, { change, route, confidence })
           ? `${actorName} added group "${route.groupName}" to role "${route.roleName}"`
           : `${actorName} added ${who} to role "${route.roleName}"`;
       break;
+    case ChangeKind.PROJECT_ACCESS_ADDED:
+      what = `${actorName} added ${who} to the project`;
+      break;
     case ChangeKind.SCHEME_CHANGED:
-      what = `${actorName} changed the permission scheme`;
+      what = change.grant?.value
+        ? `${actorName} granted "${change.grant.permission}" to "${change.grant.value}" in permission scheme "${change.scheme?.name ?? change.scheme?.id}"`
+        : `${actorName} changed the permission scheme`;
       break;
     case ChangeKind.PROJECT_SCHEME_CHANGED:
       what = `${actorName} switched the project to another permission scheme`;
