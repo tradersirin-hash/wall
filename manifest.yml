@@ -3,7 +3,7 @@
 # no scope (the Rovo agent, actions and skill, the acknowledgement panel) are added
 # later as minor versions.
 app:
-  id: ari:cloud:ecosystem::app/REPLACE_WITH_ID_FROM_FORGE_REGISTER
+  id: ari:cloud:ecosystem::app/2cd259ce-455b-4572-a4c7-2aad263b1402
   runtime:
     name: nodejs24.x
 
@@ -40,7 +40,6 @@ modules:
   function:
     - key: resolver
       handler: index.handler
-      timeoutSeconds: 25
     - key: drift-scan
       handler: index.driftScan
       timeoutSeconds: 900
