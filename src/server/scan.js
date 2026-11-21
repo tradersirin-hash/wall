@@ -203,7 +203,7 @@ export async function scanProjects(jira, { projectKeys, takenAt, extraAccountIds
 /** People Jira says can browse a project but the scan's model does not, and the reverse. */
 export function compareWithJiraBrowse(tiers, snapshot) {
   const jira = new Set(snapshot.jiraBrowse?.[tiers.project.key] ?? []);
-  const model = new Set(tiers.canSee.map((p) => p.accountId));
+  const model = new Set(tiers.canSee.filter((p) => !p.fromJiraList).map((p) => p.accountId));
   return {
     confirmed: [...model].filter((id) => jira.has(id)).sort(),
     onlyInModel: [...model].filter((id) => !jira.has(id)).sort(),

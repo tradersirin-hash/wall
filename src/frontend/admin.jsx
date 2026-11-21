@@ -162,9 +162,12 @@ function RaiseWall({ onRaised }) {
 
 function CanSee({ view }) {
   const byAccount = new Map(view.crossings.filter((c) => c.status !== 'ended').map((c) => [c.accountId, c]));
+  const people = view.tiers.canSee.filter((p) => p.accountType !== 'app');
+  const apps = view.tiers.canSee.filter((p) => p.accountType === 'app');
+  const appTable = table(['App account', 'Through', 'Evidence'], apps.map((p) => [<Person p={p} />, <Text>{p.routeText.join('; ')}</Text>, <Evidence level={p.evidence} />]));
   const { head, rows } = table(
     ['Person', 'Through', 'Evidence', 'Crossing'],
-    view.tiers.canSee.map((p) => {
+    people.map((p) => {
       const crossing = byAccount.get(p.accountId);
       const [appearance, text] = crossing ? STATUS[crossing.status] ?? ['default', crossing.status] : p.accountType === 'app' ? ['new', 'App account'] : ['removed', 'Not recorded'];
       return [<Person p={p} />, <Text>{p.routeText.join('; ')}</Text>, <Evidence level={p.evidence} />, <Lozenge appearance={appearance}>{text}</Lozenge>];
@@ -178,12 +181,18 @@ function CanSee({ view }) {
           <Text>{view.tiers.openings.map((o) => `${o.label} (${o.tier === 'can-see' ? 'can see it' : 'can administer it'})`).join('; ')}</Text>
         </SectionMessage>
       ) : null}
-      <DynamicTable head={head} rows={rows} />
+      {people.length ? <DynamicTable head={head} rows={rows} /> : <Text>No person can see the project through a named grant.</Text>}
+      {apps.length ? (
+        <Stack space="space.050">
+          <Heading as="h4" size="xsmall">App accounts ({apps.length})</Heading>
+          <DynamicTable head={appTable.head} rows={appTable.rows} rowsPerPage={10} />
+        </Stack>
+      ) : null}
       {check?.available ? (
         <Text>
-          Jira's own list of people who can browse the project agrees on {check.confirmed.length} of {view.tiers.canSee.length}.
+          Jira's own list of who can browse the project confirms {check.confirmed.length} of the {check.confirmed.length + check.onlyInModel.length} accounts the scheme names.
           {check.onlyInModel.length ? ` Not in Jira's list: ${check.onlyInModel.length} (usually inactive accounts).` : ''}
-          {check.onlyInJira.length ? ` Only in Jira's list: ${check.onlyInJira.length}.` : ''}
+          {check.onlyInJira.length ? ` ${check.onlyInJira.length} more are in Jira's list only; they are shown above with the grant that lets them in.` : ''}
         </Text>
       ) : null}
     </Stack>
@@ -192,9 +201,15 @@ function CanSee({ view }) {
 
 function CanChange({ view }) {
   const names = new Map(view.tiers.canChange.filter((p) => p.accountId).map((p) => [p.accountId, p.displayName]));
+  const apps = view.tiers.canChange.filter((p) => p.accountType === 'app');
+  const others = view.tiers.canChange.filter((p) => p.accountType !== 'app');
+  const appTable = table(
+    ['App account', 'What it can do', 'Can see it now'],
+    apps.map((p) => [<Person p={p} />, <Text>{p.powers.map((x) => POWER[x.power] ?? x.power).join('; ')}</Text>, <Text>{p.canSee ? 'Yes' : 'No'}</Text>]),
+  );
   const { head, rows } = table(
     ['Who', 'What they can do', 'Evidence', 'Can see it now'],
-    view.tiers.canChange.map((p) => [
+    others.map((p) => [
       <Person p={p} />,
       <Text>{p.powers.map((x) => POWER[x.power] ?? x.power).join('; ')}</Text>,
       <Evidence level={p.evidence} />,
@@ -205,10 +220,16 @@ function CanChange({ view }) {
     <Stack space="space.150">
       {view.tiers.selfAdmit.length ? (
         <SectionMessage appearance="warning" title={`${view.tiers.selfAdmit.length} admin(s) can let themselves in`}>
-          <Text>{view.tiers.selfAdmit.map((id) => names.get(id) ?? id).join(', ')} cannot see the project now but can change who sees it. Wall flags it if they do.</Text>
+          <Text>{view.tiers.selfAdmit.map((id) => names.get(id) ?? id).join(', ')} cannot see the project now but can change who sees it. Wall flags it, and names who did it, if they do.</Text>
         </SectionMessage>
       ) : null}
       <DynamicTable head={head} rows={rows} />
+      {apps.length ? (
+        <Stack space="space.050">
+          <Heading as="h4" size="xsmall">App accounts ({apps.length})</Heading>
+          <DynamicTable head={appTable.head} rows={appTable.rows} rowsPerPage={10} />
+        </Stack>
+      ) : null}
       <Text>
         Jira has no list of its admins: Wall checked {view.adminCheck?.checked ?? 0} account(s) with Jira's permission check
         {view.adminCheck?.complete ? '' : ' (not everyone it found)'}. Organization admins and group managers are not visible to apps.
@@ -223,8 +244,20 @@ function Drift({ view }) {
   if (!d) return <Text>{view.tiers.reason}</Text>;
   return (
     <Stack space="space.150">
-      <SectionMessage appearance={d.status === 'intact' ? 'success' : 'error'} title={d.status === 'intact' ? 'Everyone who can see the project has a recorded crossing' : 'Access and ledger disagree'}>
-        <Text>Checked {fmt(d.at)}. Recorded {d.summary.recorded} of {d.summary.canSee}; unrecorded {d.summary.unrecorded}; overstays {d.summary.overstay}.</Text>
+      <SectionMessage
+        appearance={d.status === 'intact' ? 'success' : 'error'}
+        title={
+          d.status === 'intact'
+            ? 'Everyone who can see the project has a recorded crossing'
+            : d.summary.unrecorded || d.summary.overstay
+              ? 'Access and ledger disagree'
+              : 'The permission scheme lets a whole class of people in'
+        }
+      >
+        <Text>
+          Checked {fmt(d.at)}. {d.summary.recorded} of {d.summary.people} people have a recorded crossing; {d.summary.unrecorded} unrecorded; {d.summary.overstay} overstays
+          {d.summary.openings ? `; ${d.summary.openings} opening(s) in the scheme` : ''}.
+        </Text>
       </SectionMessage>
       {d.unrecorded.map((u) => (
         <SectionMessage key={u.accountId} appearance="warning" title={`${u.displayName} can see the project without a recorded crossing`}>
@@ -325,7 +358,7 @@ function WallPage({ wallId, onBack }) {
           </Inline>
           <Text>{view.wall.subject}</Text>
           <Text>
-            {view.tiers.counts?.canSee ?? 0} can see it · {view.tiers.counts?.canChangePeople ?? 0} can change who sees it · wall raised {fmt(view.wall.raisedAt)}
+            {(view.tiers.counts?.canSee ?? 0) - (view.tiers.counts?.canSeeApps ?? 0)} people and {view.tiers.counts?.canSeeApps ?? 0} apps can see it · {view.tiers.counts?.canChangePeople ?? 0} accounts can change who sees it · wall raised {fmt(view.wall.raisedAt)}
           </Text>
           <Tabs id="wall-tabs">
             <TabList>

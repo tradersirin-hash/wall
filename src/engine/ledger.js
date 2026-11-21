@@ -39,7 +39,7 @@ export const RecordType = Object.freeze({
 });
 
 const TYPES = new Set(Object.values(RecordType));
-const ROUTE_KINDS = new Set(['direct', 'group', 'role', 'role-group', 'lead', 'existing']);
+const ROUTE_KINDS = new Set(['direct', 'group', 'role', 'role-group', 'lead', 'class', 'unexplained', 'existing']);
 export const END_CAUSES = Object.freeze(['expired', 'removed', 'access-lost', 'left', 'wall-lowered']);
 
 export class LedgerError extends Error {
@@ -229,7 +229,7 @@ function time(value, field) {
 function route(value) {
   if (!value || !ROUTE_KINDS.has(value.kind)) fail('bad-route', `route.kind must be one of ${[...ROUTE_KINDS].join(', ')}.`);
   const out = { kind: value.kind };
-  for (const k of ['roleId', 'roleName', 'groupId', 'groupName']) if (value[k] != null) out[k] = String(value[k]);
+  for (const k of ['roleId', 'roleName', 'groupId', 'groupName', 'principal']) if (value[k] != null) out[k] = String(value[k]);
   if ((out.kind === 'role' || out.kind === 'role-group') && !out.roleId) fail('bad-route', 'A role route needs roleId.');
   if ((out.kind === 'group' || out.kind === 'role-group') && !out.groupId) fail('bad-route', 'A group route needs groupId.');
   return out;

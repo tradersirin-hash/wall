@@ -45,6 +45,8 @@ export function routeKey(route) {
       return `role:${route.roleId}`;
     case 'role-group':
       return `role-group:${route.roleId}:${route.groupId}`;
+    case 'class':
+      return `class:${route.principal}`;
     default:
       return route.kind;
   }
@@ -66,6 +68,12 @@ export function describeRoute(route) {
       return 'being the project lead';
     case 'existing':
       return 'access held when the wall was raised';
+    case 'class': {
+      const label = describeClass(route.principal);
+      return `the grant to ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+    }
+    case 'unexplained':
+      return 'a route Wall cannot see (Jira says they can browse)';
     default:
       return route.kind;
   }

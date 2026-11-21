@@ -83,3 +83,22 @@ test('routes read as plain phrases', () => {
   );
   assert.equal(describeRoute({ kind: 'lead' }), 'being the project lead');
 });
+
+test("Jira's Browse list names the people a class grant lets in and confirms the rest", () => {
+  const withList = { ...site, jiraBrowse: { LEAK: ['u-ada', 'u-bea', 'u-kim'], FALCON: ['u-bea', 'u-cem'] } };
+  const leak = wallTiers(withList, 'LEAK');
+  const by = Object.fromEntries(leak.canSee.map((p) => [p.accountId, p]));
+  assert.deepEqual(Object.keys(by).sort(), ['u-ada', 'u-bea', 'u-kim']);
+  assert.equal(by['u-bea'].evidence, Evidence.CONFIRMED_BY_JIRA);
+  assert.equal(by['u-bea'].fromJiraList, undefined, 'Bea is explained by her direct grant');
+  assert.equal(by['u-kim'].fromJiraList, true);
+  assert.deepEqual(by['u-kim'].routes.map(routeKey), ['class:class:anyone', 'class:class:logged-in']);
+  assert.equal(describeRoute(by['u-kim'].routes[1]), 'the grant to any logged-in user');
+  assert.ok(!leak.selfAdmit.includes('u-ada'), 'an admin who can already see the project is not "outside"');
+
+  const falcon = wallTiers(withList, 'FALCON');
+  const bea = falcon.canSee.find((p) => p.accountId === 'u-bea');
+  assert.equal(bea.evidence, Evidence.CONFIRMED_BY_JIRA);
+  assert.equal(falcon.canSee.find((p) => p.accountId === 'u-dan').evidence, Evidence.PROVEN_STATIC, 'not in the list: no upgrade');
+  assert.deepEqual(canSeeIds(falcon), canSeeIds(wallTiers(site, 'FALCON')), 'everyone in the list is explained by the model');
+});

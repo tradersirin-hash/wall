@@ -127,6 +127,29 @@ export function wallTiers(snapshot, projectKey) {
     }
   }
 
+  // Jira's own list of who can browse the project (when the scan has it) confirms the
+  // people the model found, and names the people it can only describe as a class
+  // ("any logged-in user"). Anyone Jira lists that the model cannot explain at all is
+  // listed too, with an "unexplained" route.
+  const jiraList = snapshot.jiraBrowse?.[project.key];
+  if (Array.isArray(jiraList)) {
+    const confirmed = new Set(jiraList);
+    for (const p of canSee) if (confirmed.has(p.accountId)) p.evidence = strongerEvidence(p.evidence, Evidence.CONFIRMED_BY_JIRA);
+    const modelled = new Set(canSee.map((p) => p.accountId));
+    const classes = openings.filter((o) => o.tier === 'can-see').map((o) => o.principal);
+    for (const accountId of jiraList) {
+      if (modelled.has(accountId)) continue;
+      canSee.push({
+        principal: `user:${accountId}`,
+        ...personEntry(index, accountId),
+        evidence: Evidence.CONFIRMED_BY_JIRA,
+        routes: classes.length ? classes.map((principal) => ({ kind: 'class', principal })) : [{ kind: 'unexplained' }],
+        paths: [],
+        fromJiraList: true,
+      });
+    }
+  }
+
   // Tier 2.
   const containers = browseContainers(index, project, scheme);
   const powers = new Map();

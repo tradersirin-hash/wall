@@ -131,3 +131,12 @@ test('accounts can be ignored, for example Wall itself', () => {
   assert.deepEqual(report.apps, []);
   assert.equal(appendRecord(ledger, { type: RecordType.DRIFT_FLAGGED, by: 'u-wall', at: T.check, data: { accountId: 'u-ada', routes: [] } }).data.attribution, null);
 });
+
+test('the recorded count counts people with an open crossing, not apps', () => {
+  const report = driftReport({ tiers: wallTiers(site, 'FALCON'), records: ledger, at: '2026-11-25T00:00:00.000Z' });
+  assert.equal(report.summary.people, 7);
+  assert.equal(report.summary.recorded, 7);
+  const empty = driftReport({ tiers: wallTiers(site, 'FALCON'), records: ledger.slice(0, 1), at: '2026-11-25T00:00:00.000Z' });
+  assert.equal(empty.summary.recorded, 0);
+  assert.equal(empty.summary.unrecorded, 7);
+});

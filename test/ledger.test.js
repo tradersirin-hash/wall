@@ -233,3 +233,12 @@ test('no personal details beyond account ids are kept in records', () => {
   assert.equal('displayName' in record.data, false);
   assert.equal('insider' in record.data, false);
 });
+
+test('a wall over an open project records the people Jira lists, with the class route', () => {
+  const site = acmeSite();
+  const tiers = wallTiers({ ...site, jiraBrowse: { LEAK: ['u-bea', 'u-kim'] } }, 'LEAK');
+  const records = appendAll([], raiseWallInputs(tiers, { by: 'u-ada', at: T.raised, subject: 'Leaky deal' }));
+  assert.equal(verifyChain(records).ok, true);
+  const kim = ledgerState(records).crossings.find((c) => c.accountId === 'u-kim');
+  assert.deepEqual(kim.route, { kind: 'class', principal: 'class:anyone' });
+});
