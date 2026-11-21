@@ -243,6 +243,14 @@ resolver.define('checkAudit', async ({ payload }) => {
     records: pick.map(auditShape),
     raw: payload.raw ? pick : undefined,
   };
+  // Group records name users by user key, not account id. Map keys to account ids with Jira's migration API.
+  const keys = [...new Set(pick.flatMap((r) => [r.objectItem, ...(r.associatedItems ?? [])]).filter((i) => i?.typeName === 'USER' && i.id && !String(i.id).includes(':')).map((i) => String(i.id)))].slice(0, 20);
+  if (keys.length) {
+    const query = keys.map((k) => `key=${encodeURIComponent(k)}`).join('&');
+    const mapping = await both((as) => jira(as, route`/rest/api/3/user/bulk/migration?${new URLSearchParams(keys.map((k) => ['key', k]))}`));
+    result.userKeyMapping = { query, status: statuses(mapping), app: mapping.app.body, user: mapping.user.body };
+    log('audit-userkeys', result.userKeyMapping);
+  }
   // The raw records are the fixtures for the engine's audit rules; log them in pieces so the CLI can read them.
   if (payload.raw) pick.forEach((record, i) => log('audit-raw', { i, record }));
   log('audit', { from, status: result.status, total: result.total, summaries: result.records.map((r) => `${r.category} | ${r.summary} | author:${r.authorAccountId ?? r.authorKey}`) });
