@@ -23,6 +23,7 @@ const FIELDS = [
   ['groupId', 'Group id the target is NOT in (optional)', ''],
   ['accountId', 'Target account id (empty = you)', ''],
   ['otherAccountId', 'Another user with activity, for the graph check (empty = you)', ''],
+  ['graphProjectId', 'Project id for the graph check, for example a seeded project with activity (empty = test project)', ''],
   ['auditFrom', 'Audit log from (ISO time; empty = last 2 hours)', ''],
 ];
 
@@ -81,7 +82,11 @@ const App = () => {
   const [rawQuery, setRawQuery] = useState('query wall_schema { __type(name: "JiraWorkItem") { fields { name } } }');
   const [rawVariables, setRawVariables] = useState('{}');
 
-  const set = (key) => (event) => setForm({ ...form, [key]: event.target.value });
+  // Functional updates: UI Kit sends change events asynchronously, and a stale copy of the form drops keystrokes.
+  const set = (key) => (event) => {
+    const value = event.target.value;
+    setForm((current) => ({ ...current, [key]: value }));
+  };
 
   const run = async (name, step, payload) => {
     setBusy(step);
@@ -110,7 +115,7 @@ const App = () => {
     } catch {
       setError('Persisted queries must be a JSON array of {"queryKey": "...", "params": {...}}');
     }
-    await run('checkGraph', 'graph', { projectId: reads?.projectId, otherAccountId: form.otherAccountId.trim(), persisted: list });
+    await run('checkGraph', 'graph', { projectId: form.graphProjectId.trim() || reads?.projectId, otherAccountId: form.otherAccountId.trim(), persisted: list });
   };
 
   return (
@@ -125,14 +130,15 @@ const App = () => {
       ))}
       <Stack space="space.050">
         <Label labelFor="persisted">Persisted Cypher queries to try (JSON array of queryKey and params)</Label>
-        <TextArea id="persisted" name="persisted" value={persisted} onChange={(e) => setPersisted(e.target.value)} />
+        <TextArea id="persisted" name="persisted" value={persisted} onChange={(e) => { const v = e.target.value; setPersisted(() => v); }} />
       </Stack>
       <Inline space="space.100" shouldWrap>
         <Button appearance="primary" isDisabled={Boolean(busy)} onClick={runAll}>Run all</Button>
         <Button isDisabled={Boolean(busy)} onClick={() => run('checkIdentity', 'identity', {})}>Identity</Button>
         <Button isDisabled={Boolean(busy)} onClick={() => run('checkReads', 'reads', base())}>Reads</Button>
         <Button isDisabled={Boolean(busy)} onClick={() => run('checkWrites', 'writes', { ...base(), roleId: form.roleId.trim() })}>Writes</Button>
-        <Button isDisabled={Boolean(busy)} onClick={() => run('checkAudit', 'audit', { from: form.auditFrom.trim() || report.writes?.startedAt })}>Read audit log</Button>
+        <Button isDisabled={Boolean(busy)} onClick={() => run('checkAudit', 'audit', { from: form.auditFrom.trim() || report.writes?.startedAt, raw: true })}>Read audit log</Button>
+        <Button isDisabled={Boolean(busy)} onClick={() => run('checkGraph', 'graph', { projectId: form.graphProjectId.trim() || report.reads?.projectId, otherAccountId: form.otherAccountId.trim(), persisted: JSON.parse(persisted || '[]') })}>Graph only</Button>
       </Inline>
       {busy ? <Lozenge appearance="inprogress">Running {busy}</Lozenge> : null}
       {error ? <SectionMessage appearance="error" title="Error"><Text>{error}</Text></SectionMessage> : null}
@@ -144,8 +150,8 @@ const App = () => {
       <Heading as="h3" size="small">Report</Heading>
       <CodeBlock language="json" text={JSON.stringify(report, null, 2)} shouldWrapLongLines />
       <Heading as="h3" size="small">Raw Teamwork Graph query (as you)</Heading>
-      <TextArea id="raw-query" name="raw-query" value={rawQuery} onChange={(e) => setRawQuery(e.target.value)} />
-      <TextArea id="raw-vars" name="raw-vars" value={rawVariables} onChange={(e) => setRawVariables(e.target.value)} />
+      <TextArea id="raw-query" name="raw-query" value={rawQuery} onChange={(e) => { const v = e.target.value; setRawQuery(() => v); }} />
+      <TextArea id="raw-vars" name="raw-vars" value={rawVariables} onChange={(e) => { const v = e.target.value; setRawVariables(() => v); }} />
       <Button isDisabled={Boolean(busy)} onClick={() => run('runGraphQuery', 'rawGraph', { query: rawQuery, variables: rawVariables })}>Run query</Button>
     </Stack>
   );

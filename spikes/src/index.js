@@ -243,6 +243,8 @@ resolver.define('checkAudit', async ({ payload }) => {
     records: pick.map(auditShape),
     raw: payload.raw ? pick : undefined,
   };
+  // The raw records are the fixtures for the engine's audit rules; log them in pieces so the CLI can read them.
+  if (payload.raw) pick.forEach((record, i) => log('audit-raw', { i, record }));
   log('audit', { from, status: result.status, total: result.total, summaries: result.records.map((r) => `${r.category} | ${r.summary} | author:${r.authorAccountId ?? r.authorKey}`) });
   return trim(result);
 });
@@ -347,7 +349,6 @@ resolver.define('checkGraph', async ({ payload, context }) => {
     teamsBySpace: await curated('teamsBySpace', spaceAri, context),
     spaceWorkItems: await curated('spaceWorkItems', spaceAri, context),
     userAssignedByAri: await curated('userAssigned', userAri, context),
-    userAssignedByAccountId: await curated('userAssigned', otherUser, context, 1),
     userInTeams: await curated('userInTeams', userAri, context),
     persisted: [],
   };
