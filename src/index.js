@@ -5,8 +5,8 @@
 // Jira is read as the app, so the admin page, the scheduled check and Rovo all see
 // the same thing. Every resolver first checks that the caller is a Jira admin.
 
-import Resolver from '@forge/resolver';
-import api, { assumeTrustedRoute } from '@forge/api';
+import ResolverExport from '@forge/resolver';
+import { asApp, asUser, assumeTrustedRoute } from '@forge/api';
 import { migrationRunner, sql } from '@forge/sql';
 import { kvs } from '@forge/kvs';
 import { Queue } from '@forge/events';
@@ -16,12 +16,16 @@ import { createSqlStore } from './server/store.js';
 import { WallError, createWallService } from './server/walls.js';
 import { LedgerError } from './engine/index.js';
 
+// This package is an ES module, so a default import of a CommonJS package (such as
+// @forge/resolver) gives its whole exports object; take the class from it either way.
+const Resolver = ResolverExport.default ?? ResolverExport;
+
 const SCHEMA_KEY = 'wall-schema-version';
 const APP_ACCOUNT_KEY = 'wall-app-account';
 const migrations = new Queue({ key: 'wall-migrations' });
 
 const now = () => new Date().toISOString();
-const requester = (as) => (path, init) => (as === 'user' ? api.asUser() : api.asApp()).requestJira(assumeTrustedRoute(path), init);
+const requester = (as) => (path, init) => (as === 'user' ? asUser() : asApp()).requestJira(assumeTrustedRoute(path), init);
 const appJira = createJira(requester('app'));
 const userJira = createJira(requester('user'));
 const store = createSqlStore({
