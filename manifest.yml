@@ -1,7 +1,7 @@
-# Wall: DRAFT manifest. Not deployable yet: the handlers, the Custom UI builds and
-# the agent prompt are written from week 2. Scopes are frozen after the week-1
-# spikes and must all be in the first production deploy (any scope change, and
-# adding the sql module, forces a major version that every site must accept).
+# Wall. Every scope and the sql module are in the first production deploy: changing
+# scopes later forces a major version that every site must accept. Modules that add
+# no scope (the Rovo agent, actions and skill, the acknowledgement panel) are added
+# later as minor versions.
 app:
   id: ari:cloud:ecosystem::app/REPLACE_WITH_ID_FROM_FORGE_REGISTER
   runtime:
@@ -11,18 +11,10 @@ modules:
   jira:adminPage:
     - key: wall-admin
       resource: admin-ui
+      render: native
       resolver:
         function: resolver
       title: Wall
-
-  jira:issuePanel:
-    # Where a person who crossed acknowledges their duties.
-    - key: wall-acknowledge
-      resource: panel-ui
-      resolver:
-        function: resolver
-      title: Wall
-      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
 
   scheduledTrigger:
     - key: wall-drift-scan
@@ -45,105 +37,10 @@ modules:
       queue: wall-migrations
       function: run-migrations
 
-  rovo:agent:
-    - key: wall-agent
-      name: Wall
-      description: Answers who can see a walled Jira project, since when and why, and requests crossings for approval.
-      prompt: resource:agent-prompt;prompt.txt
-      conversationStarters:
-        - Who has known about this project, since when, and why?
-        - Did anyone get access without a recorded crossing?
-      actions:
-        - wall-who-knows
-        - wall-check
-        - wall-drift
-        - wall-request-crossing
-      skills:
-        - wall-check
-
-  action:
-    - key: wall-who-knows
-      name: Who knows
-      function: action-who-knows
-      actionVerb: GET
-      description: Lists everyone recorded as having crossed the wall of a project, with route, reason, approver, acknowledgement and dates.
-      inputs:
-        projectKey:
-          title: Project key
-          type: string
-          required: true
-          description: Key of the walled Jira project.
-        at:
-          title: As of
-          type: string
-          required: false
-          description: Optional date or time (ISO 8601); who was inside the wall at that moment.
-    - key: wall-check
-      name: Check a person against a wall
-      function: action-check
-      actionVerb: GET
-      description: Says whether a person may see a walled project and whether a crossing is recorded. Call before sharing or assigning work in a confidential project.
-      inputs:
-        projectKey:
-          title: Project key
-          type: string
-          required: true
-          description: Key of the Jira project.
-        person:
-          title: Person
-          type: string
-          required: true
-          description: Account id or name of the person.
-    - key: wall-drift
-      name: Wall drift
-      function: action-drift
-      actionVerb: GET
-      description: Compares who can see a walled project with the ledger and names who made each unrecorded change, from Jira's audit log.
-      inputs:
-        projectKey:
-          title: Project key
-          type: string
-          required: true
-          description: Key of the walled Jira project.
-    - key: wall-request-crossing
-      name: Request a crossing
-      function: action-request-crossing
-      actionVerb: CREATE
-      description: Files a request to bring a person over the wall until a date. It never grants access; an approver decides in Wall.
-      inputs:
-        projectKey:
-          title: Project key
-          type: string
-          required: true
-          description: Key of the walled Jira project.
-        person:
-          title: Person
-          type: string
-          required: true
-          description: Account id or name of the person.
-        reason:
-          title: Reason
-          type: string
-          required: true
-          description: Why the person needs access (function and reason, as on an insider list).
-        until:
-          title: Until
-          type: string
-          required: false
-          description: Optional end date (ISO 8601).
-
-  rovo:skill:
-    - key: wall-check
-      source:
-        dir: skills/wall-check
-      dependencies:
-        tools:
-          - wall-check
-          - wall-who-knows
-
   function:
     - key: resolver
       handler: index.handler
+      timeoutSeconds: 25
     - key: drift-scan
       handler: index.driftScan
       timeoutSeconds: 900
@@ -152,22 +49,10 @@ modules:
     - key: run-migrations
       handler: index.runMigrations
       timeoutSeconds: 900
-    - key: action-who-knows
-      handler: index.whoKnows
-    - key: action-check
-      handler: index.checkPerson
-    - key: action-drift
-      handler: index.driftAction
-    - key: action-request-crossing
-      handler: index.requestCrossing
 
 resources:
   - key: admin-ui
-    path: static/admin/build
-  - key: panel-ui
-    path: static/panel/build
-  - key: agent-prompt
-    path: static/agent
+    path: src/frontend/admin.jsx
 
 permissions:
   scopes:
@@ -175,7 +60,7 @@ permissions:
     - storage:app
     # Projects, permission schemes and grants, project roles, permission checks.
     - read:jira-work
-    # The app's own account, user lookup, users with a permission.
+    # The app's own account, users with a permission, user keys in audit records.
     - read:jira-user
     # Group members, audit records, adding role members.
     - manage:jira-configuration
@@ -183,10 +68,9 @@ permissions:
     - manage:jira-project
     # Lab mode creates sample work items in its own project.
     - write:jira-work
-    # Teamwork Graph engagement evidence (asUser only).
+    # Teamwork Graph engagement evidence (as the signed-in user only).
     - read:graph:user:atlassian
     - read:graph:team:atlassian
     - read:graph:project:jira
     - read:graph:issue:jira
-    # Keep only if spike 1 shows mention edges need it.
     - read:graph:issue-comment:jira

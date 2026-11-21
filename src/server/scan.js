@@ -15,6 +15,7 @@ import { path } from './jira.js';
 const RELEVANT = new Set([BROWSE, ADMINISTER_PROJECTS]);
 const GROUP_MEMBER_LIMIT = 1000;
 const ADMIN_GROUP = /admin/i;
+const CHECK_BATCH = 10;
 
 function roleIdFromUrl(url) {
   const match = String(url).match(/\/role\/(\d+)\/?$/);
@@ -164,13 +165,21 @@ export async function scanProjects(jira, { projectKeys, takenAt, extraAccountIds
 
   const everyone = [...new Set([...extraAccountIds.filter(Boolean), ...adminCandidates, ...users.keys()])];
   const candidates = everyone.slice(0, adminCheckLimit);
+  // One permission check per account, ten at a time, to stay well inside an interactive call's time limit.
   const globalChecks = [];
-  for (const accountId of candidates) {
-    try {
-      const answer = await jira.post('/rest/api/3/permissions/check', { accountId, globalPermissions: [ADMINISTER] });
-      globalChecks.push({ accountId, permission: ADMINISTER, has: (answer?.globalPermissions ?? []).includes(ADMINISTER), checkedAt: takenAt });
-    } catch (error) {
-      problems.push({ what: `admin check ${accountId}`, status: error.status ?? null });
+  for (let i = 0; i < candidates.length; i += CHECK_BATCH) {
+    const batch = candidates.slice(i, i + CHECK_BATCH);
+    const answers = await Promise.all(
+      batch.map((accountId) =>
+        jira
+          .post('/rest/api/3/permissions/check', { accountId, globalPermissions: [ADMINISTER] })
+          .then((answer) => ({ accountId, has: (answer?.globalPermissions ?? []).includes(ADMINISTER) }))
+          .catch((error) => ({ accountId, error })),
+      ),
+    );
+    for (const answer of answers) {
+      if (answer.error) problems.push({ what: `admin check ${answer.accountId}`, status: answer.error.status ?? null });
+      else globalChecks.push({ accountId: answer.accountId, permission: ADMINISTER, has: answer.has, checkedAt: takenAt });
     }
   }
   const checkedAll = candidates.length === everyone.length;
