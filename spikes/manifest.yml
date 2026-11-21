@@ -3,7 +3,7 @@
 # environment only, installed on the Forge demo site, and deleted afterwards.
 # The scopes are the candidate set for the real app, so the spike also tests them.
 app:
-  id: ari:cloud:ecosystem::app/REPLACE_WITH_ID_FROM_FORGE_REGISTER
+  id: ari:cloud:ecosystem::app/fc02b23f-71b3-4641-891b-1b5bce7a8534
   runtime:
     name: nodejs24.x
 
@@ -37,7 +37,8 @@ modules:
       name: Check project access
       function: spike-action
       actionVerb: GET
-      description: Returns the permission scheme of a Jira project and how many grants give Browse projects.
+      description: Returns the permission scheme of a Jira project and how many grants
+        give Browse projects.
       inputs:
         projectKey:
           title: Project key
