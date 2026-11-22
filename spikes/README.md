@@ -1,6 +1,6 @@
 # Wall spike: week-1 checklist
 
-A throwaway Forge app that answers the three go/no-go questions in [PLAN.md](../PLAN.md) section 5 on the Forge demo site, before more of Wall is built. It is registered as its own app, deployed to the development environment only, and deleted afterwards. Its scopes are the candidate set for the real app, so the deploy also tests them.
+A throwaway Forge app that answered Wall's three go/no-go platform questions on a Forge demo site before the build. It is registered as its own app, deployed to the development environment only, and deleted afterwards. Its scopes are the candidate set for the real app, so the deploy also tests them.
 
 | Spike | Question | Check in this app |
 |---|---|---|
@@ -78,7 +78,7 @@ ARIs: user `ari:cloud:identity::user/<accountId>`, project `ari:cloud:jira:<clou
 
 Box format: `[{"queryKey": "<key>", "params": {"id": "ari:cloud:identity::user/<accountId>"}}]`
 
-## 4. Go / no-go (PLAN.md section 5)
+## 4. Go / no-go
 
 | Spike | GO | PARTIAL | NO-GO, and what Wall does then |
 |---|---|---|---|
@@ -88,8 +88,12 @@ Box format: `[{"queryKey": "<key>", "params": {"id": "ari:cloud:identity::user/<
 
 Already known from the docs, to confirm: group changes made in admin.atlassian.com reach Jira's audit log with the author shown as "JIRA", so Wall can time them but not name who made them. Teamwork Graph works only as the signed-in user, so the scheduled scan cannot use it.
 
-## 5. Afterwards
+## 5. Results (21–22 November 2026)
+
+All three were GO. The Teamwork Graph returned work items, assignments, teams and contributed edges for live activity (new activity appeared within 7 to 10 minutes; the seeded demo projects have no work-item edges). The app account added and removed project role members; group membership works only as the signed-in admin (the app gets 403). Jira's audit log names the author of role and scheme changes; group changes made in Atlassian Administration have no author. The Rovo agent, action and skill loaded.
+
+## 6. Afterwards
 
 - Copy the real audit-record shapes into `test/fixtures/audit.js` with invented account ids, and update `AUDIT_RULES` in `src/engine/attribution.js`.
-- Record the verdicts and the scope decision in PLAN.md.
+- Record the verdicts and the scope decision.
 - `npx --no-install forge uninstall`, then delete the app in the developer console.
