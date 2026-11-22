@@ -94,6 +94,11 @@ resolver.define('candidateProjects', guarded(() => service.candidateProjects()))
 resolver.define('listWalls', guarded(() => service.listWalls()));
 resolver.define('raiseWall', guarded((p, by) => service.raiseWall({ projectKey: p.projectKey, subject: p.subject, codeName: p.codeName, identifiedAt: p.identifiedAt, by })));
 resolver.define('wallView', guarded((p, by) => service.wallView(p.wallId, { by })));
+resolver.define('deleteWall', guarded(async (p, by) => {
+  const result = await service.deleteWall(p.wallId, { confirmKey: p.confirmKey, by });
+  console.log(`Wall deleted: ${result.projectKey} (${result.recordsDeleted} records)`);
+  return result;
+}));
 
 export const handler = resolver.getDefinitions();
 

@@ -320,6 +320,45 @@ function Ledger({ view }) {
   );
 }
 
+function DeleteWall({ wall, onDeleted }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  if (!open) {
+    return (
+      <Inline>
+        <Button appearance="subtle" onClick={() => setOpen(true)}>Delete this wall…</Button>
+      </Inline>
+    );
+  }
+  const remove = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await call('deleteWall', { wallId: wall.wallId, confirmKey: typed });
+      onDeleted();
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  };
+  return (
+    <SectionMessage appearance="warning" title="Delete this wall and its whole ledger">
+      <Stack space="space.100">
+        <Text>This permanently deletes the wall, every ledger record and every scan summary for {wall.projectKey}. It cannot be undone. Nobody's access in Jira changes. Keep an export first if the records must be retained.</Text>
+        <Label labelFor="confirm-key">Type {wall.projectKey} to confirm</Label>
+        <Textfield id="confirm-key" value={typed} onChange={(e) => { const v = e.target.value; setTyped(() => v); }} />
+        {error ? <Text>{error}</Text> : null}
+        <Inline space="space.100">
+          <Button appearance="danger" isDisabled={busy || typed.trim().toUpperCase() !== wall.projectKey} onClick={remove}>{busy ? 'Deleting…' : 'Delete permanently'}</Button>
+          <Button appearance="subtle" onClick={() => setOpen(false)}>Cancel</Button>
+        </Inline>
+      </Stack>
+    </SectionMessage>
+  );
+}
+
 function WallPage({ wallId, onBack }) {
   const [view, setView] = useState(null);
   const [error, setError] = useState(null);
@@ -380,6 +419,7 @@ function WallPage({ wallId, onBack }) {
               <Box padding="space.150"><Ledger view={view} /></Box>
             </TabPanel>
           </Tabs>
+          <DeleteWall wall={view.wall} onDeleted={onBack} />
         </Stack>
       )}
     </Stack>

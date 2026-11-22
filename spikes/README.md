@@ -13,7 +13,7 @@ The page also checks the reads the scheduled drift scan needs as the app (permis
 ## 1. Before you start
 
 - Node 24.22.1 or later on the 24 line (`node --version`); the Forge CLI 15.0.0 needs `^22.23.4 || ^24.22.1 || >=26.12.1`.
-- An Atlassian account, an API token, and the Forge demo site with Rovo (founder steps).
+- An Atlassian account, an API token, and the Forge demo site with Rovo.
 - On the demo site, as admin:
   - a company-managed test project, for example `WALLTEST`;
   - a project role you are **not** in for that project (the test adds you and removes you again; it refuses to touch a role you are already in);
@@ -34,7 +34,7 @@ $env:FORGE_EMAIL = "<account email>"
 $env:FORGE_API_TOKEN = "<API token>"
 ```
 
-This machine has another program called `forge` (Foundry) on the PATH, so always call the Atlassian CLI through the local install:
+If another program called `forge` is on the PATH (Foundry, for example), call the Atlassian CLI through the local install:
 
 ```
 npx --no-install forge --version

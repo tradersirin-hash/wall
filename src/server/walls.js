@@ -181,6 +181,22 @@ export function createWallService({ jira, store, now, appAccountId = async () =>
       };
     },
 
+    /**
+     * Delete a wall and its whole ledger. Irreversible; the caller must type the
+     * project key. Jira itself is not changed: nobody loses access.
+     */
+    async deleteWall(wallId, { confirmKey, by }) {
+      if (!by) throw new WallError('no-user', 'A wall is deleted by a signed-in person.');
+      const wall = await store.getWall(wallId);
+      if (!wall) throw new WallError('no-wall', `No wall ${wallId}.`);
+      if (String(confirmKey ?? '').trim().toUpperCase() !== wall.projectKey) {
+        throw new WallError('not-confirmed', `Type ${wall.projectKey} to delete this wall.`);
+      }
+      const records = (await store.readLedger(wall.wallId)).length;
+      await store.deleteWall(wall.wallId);
+      return { wallId: wall.wallId, projectKey: wall.projectKey, recordsDeleted: records };
+    },
+
     /** The scheduled check: for every raised wall, flag new unrecorded crossings in its ledger. */
     async checkWalls() {
       const results = [];

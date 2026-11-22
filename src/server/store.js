@@ -74,6 +74,14 @@ export function createSqlStore({ exec, kv }) {
     async getAnchor(wallId) {
       return (await kv.get(anchorKey(wallId))) ?? null;
     },
+    /** Delete a wall with its whole ledger, its scans and its anchor. */
+    async deleteWall(wallId) {
+      const id = String(wallId);
+      await exec('DELETE FROM ledger_records WHERE wall_id = ?', [id]);
+      await exec('DELETE FROM scans WHERE wall_id = ?', [id]);
+      await exec('DELETE FROM walls WHERE wall_id = ?', [id]);
+      await kv.delete(anchorKey(id));
+    },
     async saveScan({ wallId, takenAt, scanHash, wallHash, summary }) {
       await exec('INSERT INTO scans (wall_id, taken_at, scan_hash, wall_hash, summary) VALUES (?, ?, ?, ?, ?)', [
         String(wallId),
@@ -125,6 +133,13 @@ export function createMemoryStore() {
     },
     async getAnchor(wallId) {
       return anchors.get(String(wallId)) ?? null;
+    },
+    async deleteWall(wallId) {
+      const id = String(wallId);
+      walls.delete(id);
+      ledgers.delete(id);
+      scans.delete(id);
+      anchors.delete(id);
     },
     async saveScan(scan) {
       const list = scans.get(String(scan.wallId)) ?? [];

@@ -132,3 +132,17 @@ test('the store refuses a second record with the same sequence number', async ()
   await assert.rejects(store.appendRecord(first), (e) => e instanceof ConflictError);
   assert.deepEqual(await store.getAnchor('1'), { seq: 0, hash: first.hash });
 });
+
+test('a wall is deleted with its whole ledger only when its project key is typed', async () => {
+  const { service, store } = setup();
+  await service.raiseWall({ projectKey: 'FALCON', subject: 'Project Falcon: proposed acquisition', by: 'u-eli' });
+  await assert.rejects(service.deleteWall('10400', { confirmKey: 'FALC', by: 'u-eli' }), (e) => e.code === 'not-confirmed');
+  await assert.rejects(service.deleteWall('10400', { confirmKey: 'FALCON' }), (e) => e.code === 'no-user');
+  assert.deepEqual(await service.deleteWall('10400', { confirmKey: 'falcon', by: 'u-eli' }), { wallId: '10400', projectKey: 'FALCON', recordsDeleted: 7 });
+  assert.deepEqual(await service.listWalls(), []);
+  assert.deepEqual(await store.readLedger('10400'), []);
+  assert.equal(await store.getAnchor('10400'), null);
+  await assert.rejects(service.deleteWall('10400', { confirmKey: 'FALCON', by: 'u-eli' }), (e) => e.code === 'no-wall');
+  const again = await service.raiseWall({ projectKey: 'FALCON', subject: 'Raised again', by: 'u-eli' });
+  assert.equal(again.records, 7, 'the project can be walled again from scratch');
+});
