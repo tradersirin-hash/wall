@@ -6,6 +6,10 @@ import ForgeReconciler, {
   Button,
   DynamicTable,
   EmptyState,
+  ErrorMessage,
+  Form,
+  FormFooter,
+  FormSection,
   Heading,
   Inline,
   Label,
@@ -21,6 +25,7 @@ import ForgeReconciler, {
   Tabs,
   Text,
   Textfield,
+  useForm,
 } from '@forge/react';
 import { invoke } from '@forge/bridge';
 
@@ -33,6 +38,9 @@ async function call(name, payload = {}) {
   }
   return result?.data;
 }
+
+/** "1 person", "3 people", "1 account", "0 accounts". */
+const n = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 
 const fmt = (iso) => (iso ? `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC` : '');
 const short = (hash) => (hash ? `${hash.slice(0, 12)}…` : '');
@@ -106,24 +114,27 @@ function WallList({ walls, onOpen }) {
 }
 
 function RaiseWall({ onRaised }) {
-  const [projects, setProjects] = useState(null);
+  const [candidates, setCandidates] = useState(null);
   const [project, setProject] = useState(null);
-  const [subject, setSubject] = useState('');
-  const [codeName, setCodeName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Text fields are uncontrolled (useForm): keystrokes are not sent back and forth on every change.
+  const { handleSubmit, register, getFieldId, formState } = useForm();
 
-  useEffect(() => {
+  const load = () => {
+    setError(null);
+    setCandidates(null);
     call('candidateProjects')
-      .then((r) => setProjects(r.projects.filter((p) => !p.teamManaged && !p.walled)))
+      .then((r) => setCandidates(r.projects))
       .catch((e) => setError(e.message));
-  }, []);
+  };
+  useEffect(load, []);
 
-  const submit = async () => {
+  const submit = async (values) => {
     setBusy(true);
     setError(null);
     try {
-      const result = await call('raiseWall', { projectKey: project?.value, subject, codeName });
+      const result = await call('raiseWall', { projectKey: project?.value, subject: values.subject, codeName: values.codeName });
       onRaised(result.wallId);
     } catch (e) {
       setError(e.message);
@@ -132,29 +143,72 @@ function RaiseWall({ onRaised }) {
     }
   };
 
-  if (!projects) return error ? <SectionMessage appearance="error" title="Projects could not be read"><Text>{error}</Text></SectionMessage> : <Spinner label="Loading projects" />;
+  if (!candidates) {
+    return error ? (
+      <SectionMessage appearance="error" title="Projects could not be read">
+        <Text>{error}</Text>
+      </SectionMessage>
+    ) : (
+      <Spinner label="Loading projects" />
+    );
+  }
+  const open = candidates.filter((p) => !p.teamManaged && !p.walled);
+  const teamManaged = candidates.filter((p) => p.teamManaged).length;
+  if (!open.length) {
+    const allWalled = candidates.some((p) => !p.teamManaged);
+    return (
+      <SectionMessage appearance="information" title={allWalled ? 'Every company-managed project already has a wall' : 'No company-managed project yet'}>
+        <Stack space="space.100">
+          {allWalled ? (
+            <Text>Open a wall from the list above, or create another company-managed project.</Text>
+          ) : (
+            <Text>
+              Wall works on company-managed projects, whose access is set by a permission scheme.
+              {teamManaged ? ` This site has ${n(teamManaged, 'team-managed project')}, which Wall cannot wall.` : ''}
+            </Text>
+          )}
+          <Text>To create one: Projects &gt; Create project &gt; pick a template (for example Kanban) &gt; on the project type step choose "Company-managed".</Text>
+          <Inline>
+            <Button onClick={load}>Check again</Button>
+          </Inline>
+        </Stack>
+      </SectionMessage>
+    );
+  }
   return (
-    <Stack space="space.150">
-      <Text>Wall records everyone who can see the project now as a baseline crossing; each of them still has to acknowledge. Team-managed projects are not listed: their access is not set by a permission scheme.</Text>
-      <Stack space="space.050">
-        <Label labelFor="wall-project">Project</Label>
-        <Select inputId="wall-project" options={projects.map((p) => ({ label: `${p.name} (${p.key})`, value: p.key }))} value={project} onChange={(v) => setProject(v)} placeholder="Choose a company-managed project" />
-      </Stack>
-      <Stack space="space.050">
-        <Label labelFor="wall-subject">Inside information this project holds</Label>
-        <Textfield id="wall-subject" value={subject} onChange={(e) => { const v = e.target.value; setSubject(() => v); }} placeholder="For example: proposed acquisition of a listed competitor" />
-      </Stack>
-      <Stack space="space.050">
-        <Label labelFor="wall-code">Code name (optional)</Label>
-        <Textfield id="wall-code" value={codeName} onChange={(e) => { const v = e.target.value; setCodeName(() => v); }} placeholder="Falcon" />
-      </Stack>
-      {error ? <SectionMessage appearance="error" title="The wall was not raised"><Text>{error}</Text></SectionMessage> : null}
-      <Inline>
-        <Button appearance="primary" isDisabled={busy || !project || subject.trim().length < 3} onClick={submit}>
+    <Form onSubmit={handleSubmit(submit)}>
+      <FormSection>
+        <Stack space="space.150">
+          <Text>
+            Wall records everyone who can see the project now as a baseline crossing; each of them still has to acknowledge.
+            {teamManaged ? ` ${n(teamManaged, 'team-managed project')} ${teamManaged === 1 ? 'is' : 'are'} not listed: their access is not set by a permission scheme.` : ''}
+          </Text>
+          <Stack space="space.050">
+            <Label labelFor="wall-project">Project</Label>
+            <Select inputId="wall-project" options={open.map((p) => ({ label: `${p.name} (${p.key})`, value: p.key }))} value={project} onChange={(v) => setProject(v)} placeholder="Choose a company-managed project" />
+          </Stack>
+          <Stack space="space.050">
+            <Label labelFor={getFieldId('subject')}>Inside information this project holds</Label>
+            <Textfield {...register('subject', { required: true, minLength: 3 })} placeholder="For example: proposed acquisition of a listed competitor" />
+            {formState.errors.subject ? <ErrorMessage>Describe it in at least three characters.</ErrorMessage> : null}
+          </Stack>
+          <Stack space="space.050">
+            <Label labelFor={getFieldId('codeName')}>Code name (optional)</Label>
+            <Textfield {...register('codeName')} placeholder="Falcon" />
+          </Stack>
+          {error ? (
+            <SectionMessage appearance="error" title="The wall was not raised">
+              <Text>{error}</Text>
+            </SectionMessage>
+          ) : null}
+        </Stack>
+      </FormSection>
+      <FormFooter align="start">
+        <Button appearance="primary" type="submit" isDisabled={busy || !project}>
           {busy ? 'Raising…' : 'Raise the wall'}
         </Button>
-      </Inline>
-    </Stack>
+      </FormFooter>
+    </Form>
   );
 }
 
@@ -190,9 +244,9 @@ function CanSee({ view }) {
       ) : null}
       {check?.available ? (
         <Text>
-          Jira's own list of who can browse the project confirms {check.confirmed.length} of the {check.confirmed.length + check.onlyInModel.length} accounts the scheme names.
+          Jira's own list of who can browse the project confirms {check.confirmed.length} of {n(check.confirmed.length + check.onlyInModel.length, 'account')} the scheme names.
           {check.onlyInModel.length ? ` Not in Jira's list: ${check.onlyInModel.length} (usually inactive accounts).` : ''}
-          {check.onlyInJira.length ? ` ${check.onlyInJira.length} more are in Jira's list only; they are shown above with the grant that lets them in.` : ''}
+          {check.onlyInJira.length ? ` ${check.onlyInJira.length} more ${check.onlyInJira.length === 1 ? 'is' : 'are'} in Jira's list only, shown above with the grant that lets them in.` : ''}
         </Text>
       ) : null}
     </Stack>
@@ -219,7 +273,7 @@ function CanChange({ view }) {
   return (
     <Stack space="space.150">
       {view.tiers.selfAdmit.length ? (
-        <SectionMessage appearance="warning" title={`${view.tiers.selfAdmit.length} admin(s) can let themselves in`}>
+        <SectionMessage appearance="warning" title={`${n(view.tiers.selfAdmit.length, 'admin')} can let themselves in`}>
           <Text>{view.tiers.selfAdmit.map((id) => names.get(id) ?? id).join(', ')} cannot see the project now but can change who sees it. Wall flags it, and names who did it, if they do.</Text>
         </SectionMessage>
       ) : null}
@@ -231,7 +285,7 @@ function CanChange({ view }) {
         </Stack>
       ) : null}
       <Text>
-        Jira has no list of its admins: Wall checked {view.adminCheck?.checked ?? 0} account(s) with Jira's permission check
+        Jira has no list of its admins: Wall checked {n(view.adminCheck?.checked ?? 0, 'account')} with Jira's permission check
         {view.adminCheck?.complete ? '' : ' (not everyone it found)'}. Organization admins and group managers are not visible to apps.
       </Text>
       {view.tiers.sharedScheme.length ? <Text>The permission scheme is shared with {view.tiers.sharedScheme.join(', ')}: a change made for those projects changes this wall too.</Text> : null}
@@ -255,8 +309,8 @@ function Drift({ view }) {
         }
       >
         <Text>
-          Checked {fmt(d.at)}. {d.summary.recorded} of {d.summary.people} people have a recorded crossing; {d.summary.unrecorded} unrecorded; {d.summary.overstay} overstays
-          {d.summary.openings ? `; ${d.summary.openings} opening(s) in the scheme` : ''}.
+          Checked {fmt(d.at)}. Recorded crossings: {d.summary.recorded} of {n(d.summary.people, 'person', 'people')}; {d.summary.unrecorded} unrecorded; {n(d.summary.overstay, 'overstay')}
+          {d.summary.openings ? `; ${n(d.summary.openings, 'opening')} in the scheme` : ''}.
         </Text>
       </SectionMessage>
       {d.unrecorded.map((u) => (
@@ -274,14 +328,14 @@ function Drift({ view }) {
           <Text>{e.sentence}</Text>
         </SectionMessage>
       ))}
-      {d.stale.length ? <Text>{d.stale.length} recorded crossing(s) no longer have access in Jira; end them in the ledger.</Text> : null}
-      {d.unacknowledged.length ? <Text>{d.unacknowledged.length} person(s) have not acknowledged their duties within 48 hours.</Text> : null}
+      {d.stale.length ? <Text>{n(d.stale.length, 'recorded crossing')} no longer {d.stale.length === 1 ? 'has' : 'have'} access in Jira; end {d.stale.length === 1 ? 'it' : 'them'} in the ledger.</Text> : null}
+      {d.unacknowledged.length ? <Text>{n(d.unacknowledged.length, 'person', 'people')} {d.unacknowledged.length === 1 ? 'has' : 'have'} not acknowledged their duties within 48 hours.</Text> : null}
       {view.audit.error ? (
         <SectionMessage appearance="warning" title="The audit log could not be read">
           <Text>Unrecorded crossings are found but not attributed. Jira answered: {view.audit.error.message}</Text>
         </SectionMessage>
       ) : (
-        <Text>Attribution read {view.audit.read} audit record(s) since the wall was raised.</Text>
+        <Text>Attribution read {n(view.audit.read, 'audit record')} since the wall was raised.</Text>
       )}
     </Stack>
   );
@@ -309,7 +363,7 @@ function Ledger({ view }) {
   );
   return (
     <Stack space="space.150">
-      <SectionMessage appearance={v.ok ? 'success' : 'error'} title={v.ok ? `The ledger verifies: ${v.length} records, chain intact${v.anchored ? ', matches the saved head' : ''}` : 'The ledger does not verify'}>
+      <SectionMessage appearance={v.ok ? 'success' : 'error'} title={v.ok ? `The ledger verifies: ${n(v.length, 'record')}, chain intact${v.anchored ? ', matches the saved head' : ''}` : 'The ledger does not verify'}>
         <Text>{v.ok ? `Head ${short(v.head?.hash)} (record ${v.head?.seq}).` : v.problems.map((p) => p.message).join(' ')}</Text>
       </SectionMessage>
       <DynamicTable head={crossings.head} rows={crossings.rows} />
@@ -322,9 +376,9 @@ function Ledger({ view }) {
 
 function DeleteWall({ wall, onDeleted }) {
   const [open, setOpen] = useState(false);
-  const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const { handleSubmit, register, getFieldId } = useForm();
   if (!open) {
     return (
       <Inline>
@@ -332,11 +386,11 @@ function DeleteWall({ wall, onDeleted }) {
       </Inline>
     );
   }
-  const remove = async () => {
+  const remove = async (values) => {
     setBusy(true);
     setError(null);
     try {
-      await call('deleteWall', { wallId: wall.wallId, confirmKey: typed });
+      await call('deleteWall', { wallId: wall.wallId, confirmKey: values.confirmKey });
       onDeleted();
     } catch (e) {
       setError(e.message);
@@ -345,16 +399,18 @@ function DeleteWall({ wall, onDeleted }) {
   };
   return (
     <SectionMessage appearance="warning" title="Delete this wall and its whole ledger">
-      <Stack space="space.100">
-        <Text>This permanently deletes the wall, every ledger record and every scan summary for {wall.projectKey}. It cannot be undone. Nobody's access in Jira changes. Keep an export first if the records must be retained.</Text>
-        <Label labelFor="confirm-key">Type {wall.projectKey} to confirm</Label>
-        <Textfield id="confirm-key" value={typed} onChange={(e) => { const v = e.target.value; setTyped(() => v); }} />
-        {error ? <Text>{error}</Text> : null}
-        <Inline space="space.100">
-          <Button appearance="danger" isDisabled={busy || typed.trim().toUpperCase() !== wall.projectKey} onClick={remove}>{busy ? 'Deleting…' : 'Delete permanently'}</Button>
-          <Button appearance="subtle" onClick={() => setOpen(false)}>Cancel</Button>
-        </Inline>
-      </Stack>
+      <Form onSubmit={handleSubmit(remove)}>
+        <Stack space="space.100">
+          <Text>This permanently deletes the wall, every ledger record and every scan summary for {wall.projectKey}. It cannot be undone. Nobody's access in Jira changes. Keep an export first if the records must be retained.</Text>
+          <Label labelFor={getFieldId('confirmKey')}>Type {wall.projectKey} to confirm</Label>
+          <Textfield {...register('confirmKey', { required: true })} />
+          {error ? <ErrorMessage>{error}</ErrorMessage> : null}
+          <Inline space="space.100">
+            <Button appearance="danger" type="submit" isDisabled={busy}>{busy ? 'Deleting…' : 'Delete permanently'}</Button>
+            <Button appearance="subtle" onClick={() => setOpen(false)}>Cancel</Button>
+          </Inline>
+        </Stack>
+      </Form>
     </SectionMessage>
   );
 }
@@ -397,7 +453,7 @@ function WallPage({ wallId, onBack }) {
           </Inline>
           <Text>{view.wall.subject}</Text>
           <Text>
-            {(view.tiers.counts?.canSee ?? 0) - (view.tiers.counts?.canSeeApps ?? 0)} people and {view.tiers.counts?.canSeeApps ?? 0} apps can see it · {view.tiers.counts?.canChangePeople ?? 0} accounts can change who sees it · wall raised {fmt(view.wall.raisedAt)}
+            {n((view.tiers.counts?.canSee ?? 0) - (view.tiers.counts?.canSeeApps ?? 0), 'person', 'people')} and {n(view.tiers.counts?.canSeeApps ?? 0, 'app')} can see it · {n(view.tiers.counts?.canChangePeople ?? 0, 'account')} can change who sees it · wall raised {fmt(view.wall.raisedAt)}
           </Text>
           <Tabs id="wall-tabs">
             <TabList>

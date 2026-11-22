@@ -19,8 +19,8 @@ Wall runs entirely on Atlassian's Forge platform and makes no outbound calls. Bu
 
 **Five-minute tour:**
 
-1. In Jira, go to **Settings (gear) > Apps > Wall**.
-2. Click **Raise a wall**, choose a company-managed project, describe the inside information it holds (for example "Proposed acquisition, test data") and raise the wall. Everyone who can see the project now is recorded as a baseline crossing.
+1. In Jira, open **Settings (gear) > Marketplace apps** ("Apps" on some sites), then **Wall** in the left sidebar.
+2. Click **Raise a wall**, choose a company-managed project (a new site often has only a team-managed one; create one with **Projects > Create project**, pick a template such as Kanban, and choose **Company-managed** on the project type step), describe the inside information it holds (for example "Proposed acquisition, test data") and raise the wall. Everyone who can see the project now is recorded as a baseline crossing.
 3. Read the four tabs:
    - **Who can see:** each person, the route that lets them in, how Wall knows it ("From the scheme", "Confirmed by Jira"), and their crossing. A red box appears if the scheme lets in a whole class of people, such as any logged-in user.
    - **Who can change it:** Jira admins, project admins, and the parts no app can see (organization admins, group managers). The amber box names admins who could let themselves in.
